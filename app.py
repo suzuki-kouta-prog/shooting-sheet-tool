@@ -9,7 +9,6 @@ import pandas as pd
 
 st.set_page_config(
     page_title='撮影シート生成ツール',
-    page_icon='📷',
     layout='centered',
     initial_sidebar_state='collapsed',
 )
@@ -190,7 +189,6 @@ st.markdown("""
 # ── ヘッダー ──────────────────────────────────────────────────────
 st.markdown("""
 <div class="app-header">
-  <div class="app-icon">📷</div>
   <div class="app-title">撮影シート生成ツール</div>
   <div class="app-sub">ExcelとPDFをアップロードするだけで撮影シートを自動生成します</div>
 </div>
