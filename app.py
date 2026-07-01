@@ -59,7 +59,7 @@ st.markdown(f"""
   }}
   .block-container {{
     max-width: 660px;
-    padding: 4rem 1.5rem 4rem;
+    padding: 2rem 1.5rem 2rem;
     background: {BG} !important;
   }}
 
@@ -69,7 +69,7 @@ st.markdown(f"""
     font-size: 1.75rem;
     font-weight: 700;
     letter-spacing: -0.02em;
-    margin-bottom: 3rem;
+    margin-bottom: 1.6rem;
     color: {FG};
   }}
 
@@ -93,7 +93,7 @@ st.markdown(f"""
     border: 1.5px solid {BORDER} !important;
     border-radius: 14px !important;
     background: {INPUT_BG} !important;
-    min-height: 130px !important;
+    min-height: 90px !important;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -184,13 +184,14 @@ st.markdown(f"""
   /* ── 余分なUI非表示 ── */
   #MainMenu, footer, header {{ visibility: hidden; }}
 
-  .gap    {{ margin-top: 1.8rem; }}
-  .gap-sm {{ margin-top: 1rem; }}
+  .gap    {{ margin-top: 1.2rem; }}
+  .gap-sm {{ margin-top: 0.7rem; }}
 </style>
 """, unsafe_allow_html=True)
 
 
 # ── モード切り替えトグル（右上） ──────────────────────
+st.markdown('<div style="margin-bottom:-1rem"></div>', unsafe_allow_html=True)
 toggle_col = st.columns([5, 1])[1]
 with toggle_col:
     icon = '☀️' if dark else '🌙'
