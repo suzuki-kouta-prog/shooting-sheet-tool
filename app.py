@@ -31,19 +31,36 @@ INPUT_HV= '#1a1a1a' if dark else '#f7f7f7'
 
 st.markdown(f"""
 <style>
-  /* ── ベース ── */
+  /* ── ベース：ブラウザ全体を背景色で埋める ── */
+  html {{
+    height: 100%;
+    background: {BG} !important;
+  }}
+  body {{
+    min-height: 100vh;
+    background: {BG} !important;
+  }}
   html, body, [class*="css"] {{
     font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue',
                  Arial, sans-serif;
-    background: {BG} !important;
     color: {FG};
   }}
-  .main, .block-container {{
+  /* Streamlit の全ラッパーを背景で統一 */
+  .stApp,
+  .stApp > div,
+  [data-testid="stAppViewContainer"],
+  [data-testid="stAppViewBlockContainer"],
+  [data-testid="stVerticalBlock"],
+  [data-testid="stMainBlockContainer"],
+  .main,
+  section.main {{
     background: {BG} !important;
+    min-height: 100vh;
   }}
   .block-container {{
     max-width: 660px;
     padding: 4rem 1.5rem 4rem;
+    background: {BG} !important;
   }}
 
   /* ── タイトル ── */
