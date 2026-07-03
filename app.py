@@ -210,6 +210,25 @@ with t_col:
 st.markdown('<div class="ssm-title">Shooting Sheet Maker</div>',
             unsafe_allow_html=True)
 
+# ── スプレッドシートリンク ────────────────────────────
+SHEET_URL = 'https://docs.google.com/spreadsheets/d/17NhMCnbASGIiyYnF4s3UfDvX80W-cb-jb7ABU70zBBc/edit?usp=sharing'
+st.markdown(f"""
+<div style="text-align:center; margin-bottom:1.2rem;">
+  <a href="{SHEET_URL}" target="_blank" style="
+    display: inline-block;
+    padding: 0.4rem 1.1rem;
+    border: 1.5px solid {BORDER};
+    border-radius: 20px;
+    font-size: 0.78rem;
+    font-weight: 500;
+    color: {FG};
+    text-decoration: none;
+    letter-spacing: 0.02em;
+    transition: background 0.2s;
+  ">↗ スプレッドシートを開く</a>
+</div>
+""", unsafe_allow_html=True)
+
 # ── 1. Excel ／ 2. PDF（2カラム）────────────────────
 col1, col2 = st.columns(2, gap='small')
 
