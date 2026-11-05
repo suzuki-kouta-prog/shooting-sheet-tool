@@ -57,11 +57,12 @@ DIVIDER  = 6  * mm
 RIGHT_X  = MARGIN + LEFT_W + DIVIDER
 RIGHT_W  = PAGE_W - MARGIN - RIGHT_X
 
-C_BLACK  = colors.black
-C_WHITE  = colors.white
-C_LABEL  = colors.HexColor('#e8e8e8')
-C_BORDER = colors.HexColor('#aaaaaa')
-C_DGRAY  = colors.HexColor('#333333')
+C_BLACK   = colors.black
+C_WHITE   = colors.white
+C_LABEL   = colors.HexColor('#e8e8e8')
+C_BORDER  = colors.HexColor('#aaaaaa')
+C_DGRAY   = colors.HexColor('#333333')
+C_MAGENTA = colors.HexColor('#CC3399')   # 未入力表示色
 
 # ════════════════════════════════════════════════════
 #  フォント設定
@@ -138,17 +139,14 @@ def load_excel(path, sheet_name=None):
     sheets = xl.sheet_names
     print(f'📋 シート一覧: {sheets}')
 
-    # シートを選択
-    if sheet_name and sheet_name in sheets:
-        target = sheet_name
-    else:
-        target = sheets[0]
+    # シートを選択：引数指定 → 最初のシート
+    target = sheet_name if (sheet_name and sheet_name in sheets) else sheets[0]
     print(f'📋 使用シート: {target}')
 
-    # まず全行読み込み（header=None）
+    # header=None で全行読み込み（マージセル考慮のため位置ベースで処理）
     raw = pd.read_excel(path, sheet_name=target, header=None, dtype=str).fillna('')
 
-    # ヘッダー候補行を探す（先頭10行で非空セルが最も多い行）
+    # データ開始行を探す（先頭10行で非空セルが最も多い行の次）
     best_row = 0
     best_count = 0
     for i in range(min(10, len(raw))):
@@ -157,20 +155,18 @@ def load_excel(path, sheet_name=None):
             best_count = cnt
             best_row = i
 
-    print(f'📋 ヘッダー行: {best_row}行目 (非空セル数={best_count})')
-    df = pd.read_excel(path, sheet_name=target, header=best_row, dtype=str).fillna('')
+    print(f'📋 ヘッダー行: {best_row}行目 (非空セル数={best_count}), データ開始: {best_row+1}行目')
 
-    # 無名列（Unnamed:）を除去
-    df.columns = [str(c) for c in df.columns]
-    df = df[[c for c in df.columns if not c.startswith('Unnamed:')]]
+    # データ部分を取得（ヘッダー行の次から）
+    df = raw.iloc[best_row + 1:].reset_index(drop=True)
 
-    # 列数に合わせてリネーム
-    rename = {old: new for old, new in zip(df.columns, COL_NAMES[:len(df.columns)])}
-    print(f'📋 列マッピング: {rename}')
-    df = df.rename(columns=rename)
+    # 列数を COL_NAMES に合わせてリネーム（位置ベース＝マージセルのズレを回避）
+    n = min(len(df.columns), len(COL_NAMES))
+    df = df.iloc[:, :n].copy()
+    df.columns = COL_NAMES[:n]
 
     # 完全空行を削除
-    df = df[df.apply(lambda r: any(v.strip() for v in r.values if isinstance(v, str)), axis=1)]
+    df = df[df.apply(lambda r: any(str(v).strip() for v in r.values), axis=1)]
     df = df.reset_index(drop=True)
     print(f'📋 有効行数: {len(df)}')
     return df
@@ -220,6 +216,12 @@ def ps(font, size, color=C_BLACK, align='left', leading=None):
 
 def P(text, font, size, color=C_BLACK, align='left'):
     return Paragraph(str(text) if text else '', ps(font, size, color, align))
+
+def val_or_blank(text, font, size, align='left'):
+    """値があればそのまま、空なら '未入力' をマゼンタで返す"""
+    if text and str(text).strip():
+        return P(text, font, size, C_BLACK, align)
+    return P('未入力', font, size, C_MAGENTA, align)
 
 # ════════════════════════════════════════════════════
 #  左パネル: PDF描画
@@ -301,14 +303,17 @@ def build_right(df, row, page_no, total, font, avail_w):
     VW1 = W / 2 - LW1
 
     def lbl1(t): return P(t, font, 8.5, C_DGRAY, 'center')
-    def val1(t): return P(t, font, 10,  C_BLACK, 'left')
+    def val1(t): return val_or_blank(t, font, 10)
 
-    date_fmt  = format_date(get(row, 'date'))       # ② ○月○日に変換
+    date_raw  = get(row, 'date')
+    date_fmt  = format_date(date_raw) if date_raw else ''
     studio_v  = get(row, 'studio')
     time_v    = get(row, 'time')
     client_v  = get(row, 'client')
     product_v = get(row, 'product_name')
-    sub_page  = f"{get(row,'subject')} / {get(row,'pub_page')}p"
+    subj      = get(row, 'subject')
+    pub       = get(row, 'pub_page')
+    sub_page  = f"{subj} / {pub}p" if (subj or pub) else ''
 
     info_t = Table(
         [[lbl1('撮影日'),   val1(date_fmt),   lbl1('スタジオ'),    val1(studio_v)],
@@ -337,7 +342,7 @@ def build_right(df, row, page_no, total, font, avail_w):
     ROW_H = 9 * mm
 
     def lbl2(t): return P(t, font, 8.5, C_DGRAY, 'center')
-    def val2(t, size=10): return P(t, font, size, C_BLACK, 'left')
+    def val2(t, size=10): return val_or_blank(t, font, size)
 
     # ③ 撮影ナンバー: J×K が同じ全行の M列を「／」で連結
     shoot_no = get_shoot_numbers(df, row)
@@ -353,15 +358,15 @@ def build_right(df, row, page_no, total, font, avail_w):
     remarks_v   = get(row, 'remarks')
 
     det_t = Table(
-        [[lbl2('撮影ナンバー'),     val2(shoot_no, 11)],
-         [lbl2('単品撮影'),         val2(cnt_single)],
-         [lbl2('モデル撮影'),       val2(cnt_model)],
-         [lbl2('モデル名'),         val2(mdl_name_v)],
-         [lbl2('イメージ撮影'),     val2(cnt_image)],
-         [lbl2('特徴'),             val2(cnt_feature)],
+        [[lbl2('撮影ナンバー'),       val2(shoot_no, 11)],
+         [lbl2('単品撮影'),           val2(cnt_single)],
+         [lbl2('モデル撮影'),         val2(cnt_model)],
+         [lbl2('モデル名'),           val2(mdl_name_v)],
+         [lbl2('イメージ撮影'),       val2(cnt_image)],
+         [lbl2('特徴'),               val2(cnt_feature)],
          [lbl2('建て込み／\n白背景'), val2(background)],
-         [lbl2('必要な備品'),       val2(equipment)],
-         [lbl2('備考'),             val2(remarks_v)]],
+         [lbl2('必要な備品'),         val2(equipment)],
+         [lbl2('備考'),               val2(remarks_v)]],
         colWidths=[LW2, VW2],
         rowHeights=[ROW_H] * 9
     )
