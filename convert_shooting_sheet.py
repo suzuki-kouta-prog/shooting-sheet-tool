@@ -128,10 +128,52 @@ COL_NAMES = [
     'remarks',       # 24 Y 備考
 ]
 
-def load_excel(path):
-    df = pd.read_excel(path, header=0, dtype=str).fillna('')
+def load_excel(path, sheet_name=None):
+    """
+    Excelを読み込む。
+    - 複数シートがある場合、sheet_name を優先。省略時は最初の非空シートを使用。
+    - ヘッダー行を自動検出（先頭5行の中で列数が最大の行）。
+    """
+    xl = pd.ExcelFile(path)
+    sheets = xl.sheet_names
+    print(f'📋 シート一覧: {sheets}')
+
+    # シートを選択
+    if sheet_name and sheet_name in sheets:
+        target = sheet_name
+    else:
+        target = sheets[0]
+    print(f'📋 使用シート: {target}')
+
+    # まず全行読み込み（header=None）
+    raw = pd.read_excel(path, sheet_name=target, header=None, dtype=str).fillna('')
+
+    # ヘッダー候補行を探す（先頭10行で非空セルが最も多い行）
+    best_row = 0
+    best_count = 0
+    for i in range(min(10, len(raw))):
+        cnt = (raw.iloc[i] != '').sum()
+        if cnt > best_count:
+            best_count = cnt
+            best_row = i
+
+    print(f'📋 ヘッダー行: {best_row}行目 (非空セル数={best_count})')
+    df = pd.read_excel(path, sheet_name=target, header=best_row, dtype=str).fillna('')
+
+    # 無名列（Unnamed:）を除去
+    df.columns = [str(c) for c in df.columns]
+    df = df[[c for c in df.columns if not c.startswith('Unnamed:')]]
+
+    # 列数に合わせてリネーム
     rename = {old: new for old, new in zip(df.columns, COL_NAMES[:len(df.columns)])}
-    return df.rename(columns=rename)
+    print(f'📋 列マッピング: {rename}')
+    df = df.rename(columns=rename)
+
+    # 完全空行を削除
+    df = df[df.apply(lambda r: any(v.strip() for v in r.values if isinstance(v, str)), axis=1)]
+    df = df.reset_index(drop=True)
+    print(f'📋 有効行数: {len(df)}')
+    return df
 
 def get(row, field, default=''):
     if field in row.index:
@@ -350,15 +392,30 @@ def build_pdf(df, output_path, font, pdf_dir=None):
     total = len(df)
 
     def resolve_pdf(path):
-        """パスが存在しない場合、pdf_dir からファイル名で検索"""
-        if path and os.path.exists(path):
+        """パスが存在しない場合、pdf_dir からファイル名で検索（大文字小文字・拡張子を柔軟に対応）"""
+        if not path or str(path).strip() in ('', 'nan', 'None'):
+            return ''
+        path = str(path).strip()
+        if os.path.exists(path):
             return path
-        if pdf_dir and path:
+        if pdf_dir:
             basename = os.path.basename(path)
+            # 完全一致
             candidate = os.path.join(pdf_dir, basename)
             if os.path.exists(candidate):
                 return candidate
-        return path  # 見つからなくてもパスをそのまま返す（空白表示）
+            # 大文字小文字無視で検索
+            try:
+                for f in os.listdir(pdf_dir):
+                    if f.lower() == basename.lower():
+                        return os.path.join(pdf_dir, f)
+                    # 拡張子なしで比較（例: Excelに拡張子なしで書かれている場合）
+                    if os.path.splitext(f)[0].lower() == os.path.splitext(basename)[0].lower():
+                        return os.path.join(pdf_dir, f)
+            except Exception:
+                pass
+        print(f'⚠ PDF未検出: {path}')
+        return ''  # 見つからなければ空文字（左パネルは空白）
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         c = pdf_canvas.Canvas(output_path, pagesize=landscape(A3))
