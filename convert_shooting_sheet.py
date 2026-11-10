@@ -385,12 +385,13 @@ def build_right(df, row, page_no, total, font, avail_w):
 # ════════════════════════════════════════════════════
 #  PDF出力メイン
 # ════════════════════════════════════════════════════
-def build_pdf(df, output_path, font, pdf_dir=None):
+def build_pdf(df, output_path, font, pdf_dir=None, progress_cb=None):
     """
-    df        : load_excel() で読み込んだ DataFrame
-    output_path: 出力先パス
-    font      : setup_font() で返されたフォント名
-    pdf_dir   : PDFファイルを探す追加ディレクトリ（Streamlit用）
+    df          : load_excel() で読み込んだ DataFrame
+    output_path : 出力先パス
+    font        : setup_font() で返されたフォント名
+    pdf_dir     : PDFファイルを探す追加ディレクトリ（Streamlit用）
+    progress_cb : 進捗コールバック callback(current, total) — 省略可
     """
     total = len(df)
 
@@ -437,6 +438,9 @@ def build_pdf(df, output_path, font, pdf_dir=None):
                       topPadding=0, bottomPadding=0,
                       showBoundary=0)
             f.addFromList(right_story, c)
+
+            if progress_cb:
+                progress_cb(pg_idx + 1, total)
 
         c.save()
 
