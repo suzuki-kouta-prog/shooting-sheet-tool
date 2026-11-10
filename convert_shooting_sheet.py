@@ -62,7 +62,6 @@ C_WHITE   = colors.white
 C_LABEL   = colors.HexColor('#e8e8e8')
 C_BORDER  = colors.HexColor('#aaaaaa')
 C_DGRAY   = colors.HexColor('#333333')
-C_MAGENTA = colors.HexColor('#CC3399')   # 未入力表示色
 
 # ════════════════════════════════════════════════════
 #  フォント設定
@@ -217,11 +216,6 @@ def ps(font, size, color=C_BLACK, align='left', leading=None):
 def P(text, font, size, color=C_BLACK, align='left'):
     return Paragraph(str(text) if text else '', ps(font, size, color, align))
 
-def val_or_blank(text, font, size, align='left'):
-    """値があればそのまま、空なら '未入力' をマゼンタで返す"""
-    if text and str(text).strip():
-        return P(text, font, size, C_BLACK, align)
-    return P('未入力', font, size, C_MAGENTA, align)
 
 # ════════════════════════════════════════════════════
 #  左パネル: PDF描画
@@ -267,43 +261,42 @@ def render_left(c, pdf_path, tmp_dir, font):
 
 
 # ════════════════════════════════════════════════════
-#  右パネル: シンプル罫線フォーム
+#  右パネル: 撮影シートフォーム（レイアウト案準拠）
 # ════════════════════════════════════════════════════
 def build_right(df, row, page_no, total, font, avail_w):
     W     = avail_w
     story = []
 
-    # ── タイトル行 ─────────────────────────────────
+    # ── ヘッダー ───────────────────────────────────
     title_t = Table(
         [[P(CATALOG_TITLE, font, 11, C_BLACK, 'left'),
           P(f'P.{page_no:02d}', font, 11, C_BLACK, 'right')]],
         colWidths=[W * 0.75, W * 0.25]
     )
     title_t.setStyle(TableStyle([
-        ('VALIGN', (0,0), (-1,-1), 'BOTTOM'),
-        ('TOPPADDING', (0,0), (-1,-1), 0),
+        ('VALIGN',        (0,0), (-1,-1), 'BOTTOM'),
+        ('TOPPADDING',    (0,0), (-1,-1), 0),
         ('BOTTOMPADDING', (0,0), (-1,-1), 3),
-        ('LEFTPADDING', (0,0), (-1,-1), 0),
-        ('RIGHTPADDING', (0,0), (-1,-1), 0),
+        ('LEFTPADDING',   (0,0), (-1,-1), 0),
+        ('RIGHTPADDING',  (0,0), (-1,-1), 0),
     ]))
     story.append(title_t)
 
-    # 横罫線
     rule = Table([['']], colWidths=[W])
     rule.setStyle(TableStyle([
-        ('LINEBELOW', (0,0), (-1,-1), 0.8, C_BORDER),
-        ('TOPPADDING', (0,0), (-1,-1), 0),
+        ('LINEBELOW',     (0,0), (-1,-1), 0.8, C_BORDER),
+        ('TOPPADDING',    (0,0), (-1,-1), 0),
         ('BOTTOMPADDING', (0,0), (-1,-1), 0),
     ]))
     story.append(rule)
     story.append(Spacer(1, 4 * mm))
 
-    # ── 上段：基本情報テーブル ──────────────────────
-    LW1 = 18 * mm
-    VW1 = W / 2 - LW1
+    # ── 上段：基本情報（3行×2列） ──────────────────
+    LW1  = 20 * mm
+    VW1  = W / 2 - LW1
 
-    def lbl1(t): return P(t, font, 8.5, C_DGRAY, 'center')
-    def val1(t): return val_or_blank(t, font, 10)
+    def lbl1(t): return P(t, font, 8, C_DGRAY, 'center')
+    def val1(t): return P(t, font, 10, C_BLACK, 'left')
 
     date_raw  = get(row, 'date')
     date_fmt  = format_date(date_raw) if date_raw else ''
@@ -313,21 +306,21 @@ def build_right(df, row, page_no, total, font, avail_w):
     product_v = get(row, 'product_name')
     subj      = get(row, 'subject')
     pub       = get(row, 'pub_page')
-    sub_page  = f"{subj} / {pub}p" if (subj or pub) else ''
+    sub_page  = f"{subj}／{pub}" if (subj and pub) else (subj or pub)
 
-    info_t = Table(
-        [[lbl1('撮影日'),   val1(date_fmt),   lbl1('スタジオ'),    val1(studio_v)],
-         [lbl1('撮影時間'), val1(time_v),     lbl1('担当'),        val1(client_v)],
-         [lbl1('商品名'),   val1(product_v),  lbl1('教科／掲載頁'), val1(sub_page)]],
-        colWidths=[LW1, VW1, LW1, VW1]
-    )
+    info_data = [
+        [lbl1('撮影日時'),   val1(date_fmt),   lbl1('スタジオ'),     val1(studio_v)],
+        [lbl1('撮影時間'),   val1(time_v),     lbl1('お客様担当'),   val1(client_v)],
+        [lbl1('商品名'),     val1(product_v),  lbl1('教科／掲載頁'), val1(sub_page)],
+    ]
+    info_t = Table(info_data, colWidths=[LW1, VW1, LW1, VW1])
     info_t.setStyle(TableStyle([
         ('BACKGROUND',    (0,0), (0,-1), C_LABEL),
         ('BACKGROUND',    (2,0), (2,-1), C_LABEL),
         ('GRID',          (0,0), (-1,-1), 0.5, C_BORDER),
         ('VALIGN',        (0,0), (-1,-1), 'MIDDLE'),
-        ('TOPPADDING',    (0,0), (-1,-1), 4),
-        ('BOTTOMPADDING', (0,0), (-1,-1), 4),
+        ('TOPPADDING',    (0,0), (-1,-1), 5),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 5),
         ('LEFTPADDING',   (0,0), (-1,-1), 4),
         ('RIGHTPADDING',  (0,0), (-1,-1), 4),
         ('ALIGN',         (0,0), (0,-1), 'CENTER'),
@@ -336,44 +329,53 @@ def build_right(df, row, page_no, total, font, avail_w):
     story.append(info_t)
     story.append(Spacer(1, 5 * mm))
 
-    # ── 下段：撮影詳細テーブル ─────────────────────
-    LW2 = 22 * mm
-    VW2 = W - LW2
-    ROW_H = 9 * mm
+    # ── 下段：撮影詳細（13行） ─────────────────────
+    LW2   = 26 * mm   # ラベル列幅
+    VW2   = W - LW2   # 値列幅
+    RH    = 9  * mm   # 通常行高
+    RH_REM = 36 * mm  # 備考行高（大きめ）
 
-    def lbl2(t): return P(t, font, 8.5, C_DGRAY, 'center')
-    def val2(t, size=10): return val_or_blank(t, font, size)
+    def lbl2(t): return P(t, font, 8, C_DGRAY, 'center')
+    def val2(t, size=10): return P(t, font, size, C_BLACK, 'left')
 
-    # ③ 撮影ナンバー: J×K が同じ全行の M列を「／」で連結
-    shoot_no = get_shoot_numbers(df, row)
-
-    # ④ 各欄の参照列
+    # 撮影ナンバー：J/K が同じ全行の M列を「／」で連結
+    shoot_no    = get_shoot_numbers(df, row)
+    filename_v  = get(row, 'filename')     # M列
+    cut_type_v  = get(row, 'cut_type')     # N列
     cnt_single  = get(row, 'cnt_single')   # O列
     cnt_model   = get(row, 'cnt_model')    # P列
-    mdl_name_v  = get(row, 'mdl_name')    # V列のみ（単独）
-    cnt_image   = get(row, 'cnt_image')   # Q列
-    cnt_feature = get(row, 'cnt_feature') # R列
-    background  = get(row, 'background')
-    equipment   = get(row, 'equipment')
-    remarks_v   = get(row, 'remarks')
+    cnt_image   = get(row, 'cnt_image')    # Q列
+    mdl_child   = get(row, 'mdl_child')   # S列
+    mdl_teacher = get(row, 'mdl_teacher') # T列
+    mdl_adult   = get(row, 'mdl_adult')   # U列
+    mdl_name_v  = get(row, 'mdl_name')    # V列
+    background  = get(row, 'background')  # W列
+    equipment   = get(row, 'equipment')   # X列
+    remarks_v   = get(row, 'remarks')     # Y列
 
-    det_t = Table(
-        [[lbl2('撮影ナンバー'),       val2(shoot_no, 11)],
-         [lbl2('単品撮影'),           val2(cnt_single)],
-         [lbl2('モデル撮影'),         val2(cnt_model)],
-         [lbl2('モデル名'),           val2(mdl_name_v)],
-         [lbl2('イメージ撮影'),       val2(cnt_image)],
-         [lbl2('特徴'),               val2(cnt_feature)],
-         [lbl2('建て込み／\n白背景'), val2(background)],
-         [lbl2('必要な備品'),         val2(equipment)],
-         [lbl2('備考'),               val2(remarks_v)]],
-        colWidths=[LW2, VW2],
-        rowHeights=[ROW_H] * 9
-    )
+    rows_data = [
+        [lbl2('撮影ナンバー'),           val2(shoot_no, 10)],
+        [lbl2('ファイル名'),             val2(filename_v)],
+        [lbl2('カット内容'),             val2(cut_type_v)],
+        [lbl2('カット数\n(単品)'),       val2(cnt_single)],
+        [lbl2('カット数\n(モデル撮影)'), val2(cnt_model)],
+        [lbl2('カット数\n(イメージ撮影)'), val2(cnt_image)],
+        [lbl2('児童・生徒モデル'),       val2(mdl_child)],
+        [lbl2('先生モデル'),             val2(mdl_teacher)],
+        [lbl2('大人モデル'),             val2(mdl_adult)],
+        [lbl2('モデル名'),               val2(mdl_name_v)],
+        [lbl2('建て込み／白背景'),       val2(background)],
+        [lbl2('必要備品'),               val2(equipment)],
+        [lbl2('備考'),                   val2(remarks_v)],
+    ]
+    row_heights = [RH] * 12 + [RH_REM]
+
+    det_t = Table(rows_data, colWidths=[LW2, VW2], rowHeights=row_heights)
     det_t.setStyle(TableStyle([
         ('BACKGROUND',    (0,0), (0,-1), C_LABEL),
         ('GRID',          (0,0), (-1,-1), 0.5, C_BORDER),
         ('VALIGN',        (0,0), (-1,-1), 'MIDDLE'),
+        ('VALIGN',        (0,12), (1,12), 'TOP'),   # 備考は上寄せ
         ('TOPPADDING',    (0,0), (-1,-1), 3),
         ('BOTTOMPADDING', (0,0), (-1,-1), 3),
         ('LEFTPADDING',   (0,0), (-1,-1), 4),
