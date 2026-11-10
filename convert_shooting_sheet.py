@@ -191,17 +191,13 @@ def format_date(date_str):
 
 def get_shoot_numbers(df, row):
     """
-    同じ J列(fn_ky) × K列(fn_num) を持つ全行の M列(filename) を取得し
-    「／」で連結して返す。
-    例: J=KY, K=1 のとき "KY-1-1／KY-1-2／KY-1-3"
+    その行の M列(filename) をそのまま撮影ナンバーとして返す。
+    M列が空の場合は J列(fn_ky) を返す。
     """
-    ky  = get(row, 'fn_ky')
-    num = get(row, 'fn_num')
-    if not ky and not num:
-        return get(row, 'filename')
-    mask = (df['fn_ky'] == ky) & (df['fn_num'] == num)
-    filenames = df.loc[mask, 'filename'].tolist()
-    return '／'.join(f for f in filenames if f)
+    fn = get(row, 'filename')
+    if fn:
+        return fn
+    return get(row, 'fn_ky')
 
 # ════════════════════════════════════════════════════
 #  スタイルヘルパー
