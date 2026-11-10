@@ -183,6 +183,16 @@ button[kind="secondary"][data-testid="stButton"] > button {{
   width: auto !important;
 }}
 
+/* ════ プログレスバー ════ */
+[data-testid="stProgressBar"] > div {{
+  background: {BORDER} !important;
+  border-radius: 99px !important;
+  height: 4px !important;
+}}
+[data-testid="stProgressBar"] > div > div {{
+  background: {FG} !important;
+  border-radius: 99px !important;
+}}
 /* ════ spinner ════ */
 [data-testid="stSpinner"] > div {{ border-top-color: {FG} !important; }}
 
@@ -260,57 +270,59 @@ if 'pdf_fname' not in st.session_state:
 
 if st.button('Convert to PDF', disabled=(excel_file is None),
              use_container_width=True):
-    with st.spinner(''):
-        try:
-            import convert_shooting_sheet as cs
-            cs.CATALOG_TITLE = title_input
-            font = cs.setup_font()
+    try:
+        import convert_shooting_sheet as cs
+        cs.CATALOG_TITLE = title_input
+        font = cs.setup_font()
 
-            excel_file.seek(0)
-            with tempfile.NamedTemporaryFile(suffix='.xlsx', delete=False) as f:
-                f.write(excel_file.read())
-                tmp_xl = f.name
+        excel_file.seek(0)
+        with tempfile.NamedTemporaryFile(suffix='.xlsx', delete=False) as f:
+            f.write(excel_file.read())
+            tmp_xl = f.name
 
-            df = cs.load_excel(tmp_xl)
+        df = cs.load_excel(tmp_xl)
+        total_pages = len(df)
 
-            pdf_dir = tempfile.mkdtemp()
-            pdf_names = []
-            for pf in (pdf_files or []):
-                dest = os.path.join(pdf_dir, pf.name)
-                with open(dest, 'wb') as f:
-                    f.write(pf.read())
-                pdf_names.append(pf.name)
+        pdf_dir = tempfile.mkdtemp()
+        pdf_names = []
+        for pf in (pdf_files or []):
+            dest = os.path.join(pdf_dir, pf.name)
+            with open(dest, 'wb') as f:
+                f.write(pf.read())
+            pdf_names.append(pf.name)
 
-            # ── データ確認（デバッグ用展開パネル） ──
-            with st.expander('📋 読み込みデータ確認', expanded=False):
-                st.markdown(f'**列数**: {len(df.columns)}  |  **行数**: {len(df)}')
-                st.markdown(f'**列名**: {list(df.columns)}')
-                show_cols = [c for c in ['date','studio','product_name','fn_ky','fn_num','filename','pdf_path'] if c in df.columns]
-                st.dataframe(df[show_cols].head(10), use_container_width=True)
-                st.markdown(f'**アップロードPDF**: {pdf_names if pdf_names else "なし"}')
-                if 'pdf_path' in df.columns:
-                    for _, row in df.iterrows():
-                        raw_p = cs.get(row, 'pdf_path')
-                        if not raw_p:
-                            continue
-                        base = os.path.basename(raw_p)
-                        found = any(n.lower() == base.lower() or
-                                    os.path.splitext(n)[0].lower() == os.path.splitext(base)[0].lower()
-                                    for n in pdf_names)
-                        icon = '✅' if found else '❌'
-                        st.markdown(f'{icon} `{raw_p}` → `{base}`')
+        # ── プログレスバー ──────────────────────────
+        st.markdown(f'<span class="ssm-label">Converting… (全 {total_pages} ページ)</span>',
+                    unsafe_allow_html=True)
+        progress_bar  = st.progress(0)
+        status_text   = st.empty()
 
-            out = os.path.join(tempfile.gettempdir(), 'output.pdf')
-            cs.build_pdf(df, out, font, pdf_dir=pdf_dir)
+        def on_progress(current, total):
+            ratio = current / total
+            progress_bar.progress(ratio)
+            status_text.markdown(
+                f'<span style="font-size:0.78rem;color:{MUTED};">'
+                f'  {current} / {total} ページ完了</span>',
+                unsafe_allow_html=True,
+            )
 
-            with open(out, 'rb') as f:
-                st.session_state.pdf_bytes = f.read()
-            st.session_state.pdf_fname = (
-                os.path.splitext(excel_file.name)[0] + '_撮影シート.pdf')
+        out = os.path.join(tempfile.gettempdir(), 'output.pdf')
+        cs.build_pdf(df, out, font, pdf_dir=pdf_dir, progress_cb=on_progress)
 
-        except Exception as e:
-            st.error(str(e))
-            import traceback; st.code(traceback.format_exc())
+        progress_bar.progress(1.0)
+        status_text.markdown(
+            f'<span style="font-size:0.78rem;color:{MUTED};">✓ 完了</span>',
+            unsafe_allow_html=True,
+        )
+
+        with open(out, 'rb') as f:
+            st.session_state.pdf_bytes = f.read()
+        st.session_state.pdf_fname = (
+            os.path.splitext(excel_file.name)[0] + '_撮影シート.pdf')
+
+    except Exception as e:
+        st.error(str(e))
+        import traceback; st.code(traceback.format_exc())
 
 if st.session_state.pdf_bytes:
     st.download_button(
