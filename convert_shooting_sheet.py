@@ -131,15 +131,36 @@ COL_NAMES = [
 def load_excel(path, sheet_name=None):
     """
     Excelを読み込む。
-    - 複数シートがある場合、sheet_name を優先。省略時は最初の非空シートを使用。
-    - ヘッダー行を自動検出（先頭5行の中で列数が最大の行）。
+    シート選択の優先順位:
+      1. sheet_name 引数で明示指定
+      2. シート名に「最新」を含むシート（複数ある場合は末尾のもの）
+      3. データ行数が最も多いシート
+      4. 最初のシート（フォールバック）
+    ヘッダー行は先頭10行のうち非空セル数が最多の行を自動検出。
+    列は位置ベースで COL_NAMES にマッピング（セル結合のズレを回避）。
     """
     xl = pd.ExcelFile(path)
     sheets = xl.sheet_names
     print(f'📋 シート一覧: {sheets}')
 
-    # シートを選択：引数指定 → 最初のシート
-    target = sheet_name if (sheet_name and sheet_name in sheets) else sheets[0]
+    if sheet_name and sheet_name in sheets:
+        target = sheet_name
+    else:
+        # 「最新」を含むシートを優先（複数あれば最後のもの）
+        latest = [s for s in sheets if '最新' in s]
+        if latest:
+            target = latest[-1]
+        else:
+            # データ行数が最も多いシートを選択
+            best_sheet, best_rows = sheets[0], 0
+            for s in sheets:
+                try:
+                    n = len(pd.read_excel(path, sheet_name=s, header=None))
+                    if n > best_rows:
+                        best_rows, best_sheet = n, s
+                except Exception:
+                    pass
+            target = best_sheet
     print(f'📋 使用シート: {target}')
 
     # header=None で全行読み込み（マージセル考慮のため位置ベースで処理）
@@ -396,25 +417,40 @@ def build_pdf(df, output_path, font, pdf_dir=None, progress_cb=None):
     total = len(df)
 
     def resolve_pdf(path):
-        """パスが存在しない場合、pdf_dir からファイル名で検索（大文字小文字・拡張子を柔軟に対応）"""
+        """
+        ExcelのPDF列の値からアップロードされたPDFファイルを特定する。
+        マッチング優先順位:
+          1. フルパスがそのまま存在する
+          2. pdf_dir 内で完全一致（大文字小文字無視）
+          3. pdf_dir 内で拡張子なし一致（ベース名が同じ）
+          4. pdf_dir 内で前方一致
+             例: Excel="KY101-B-11-012_comp1.pdf"
+                 ファイル="KY101-B-11-012_comp1-2b497e3c.pdf" → ヒット
+        """
         if not path or str(path).strip() in ('', 'nan', 'None'):
             return ''
         path = str(path).strip()
         if os.path.exists(path):
             return path
         if pdf_dir:
-            basename = os.path.basename(path)
-            # 完全一致
-            candidate = os.path.join(pdf_dir, basename)
-            if os.path.exists(candidate):
-                return candidate
-            # 大文字小文字無視で検索
+            basename  = os.path.basename(path)
+            stem      = os.path.splitext(basename)[0].lower()   # 拡張子なし・小文字
             try:
                 for f in os.listdir(pdf_dir):
-                    if f.lower() == basename.lower():
+                    if not f.lower().endswith('.pdf'):
+                        continue
+                    f_lower = f.lower()
+                    f_stem  = os.path.splitext(f)[0].lower()
+                    # ① 完全一致（大文字小文字無視）
+                    if f_lower == basename.lower():
                         return os.path.join(pdf_dir, f)
-                    # 拡張子なしで比較（例: Excelに拡張子なしで書かれている場合）
-                    if os.path.splitext(f)[0].lower() == os.path.splitext(basename)[0].lower():
+                    # ② 拡張子なし完全一致
+                    if f_stem == stem:
+                        return os.path.join(pdf_dir, f)
+                    # ③ 前方一致（ハッシュ付きファイル名対応）
+                    #    例: stem="ky101-b-11-012_comp1"
+                    #        f_stem="ky101-b-11-012_comp1-2b497e3c" → starts with stem+"-" or stem+"_"
+                    if f_stem.startswith(stem + '-') or f_stem.startswith(stem + '_'):
                         return os.path.join(pdf_dir, f)
             except Exception:
                 pass
